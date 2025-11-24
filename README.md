@@ -1,39 +1,54 @@
-Horta Vertical Inteligente — API + Automação Automática
+#  HORTA_API  
+### Automação Inteligente para Horta Vertical
 
-Este projeto implementa um sistema de automação para uma horta vertical utilizando Python, Flask, Arduino e integração com a OpenWeather API.
-A aplicação consulta automaticamente a previsão do tempo e decide se deve acionar ou não a irrigação da planta.
+**HORTA_API** é o backend responsável pela automação de um sistema de **Horta Vertical Inteligente**.  
+O projeto utiliza **Python + Flask** para expor uma API capaz de tomar decisões automáticas de irrigação com base em dados reais de previsão do tempo, além de se comunicar diretamente com um **Arduino**, responsável pelo controle físico da bomba d’água.
 
-O Arduino recebe os comandos, aciona um relé conectado à bomba d’água e utiliza LEDs indicadores para mostrar o estado da irrigação.
+---
 
-Tecnologias Utilizadas
+##  Funcionalidades Principais
 
-Python 3.10+
+###  Automação Inteligente  
+A API consulta o **OpenWeatherMap** para obter previsões de chuva nas próximas horas.
 
-Flask
+###  Decisão Lógica  
+-  **Se a previsão de chuva for alta:** a irrigação é *suspensa* para economizar água.  
+-  **Caso contrário:** a API envia comando para **acionar a bomba**.
 
-Requests
+###  Comunicação Serial  
+- Implementada com **PySerial**, permite enviar comandos diretos do Python para o Arduino.
 
-Python Dotenv
+###  Controle Físico  
+- O Arduino recebe os comandos e aciona um **relé**, que controla a bomba d’água.
+- LEDs indicam estados de irrigação no sistema físico (opcional).
 
-PySerial
+###  Modo de Simulação  
+Inclui o módulo **simulador_arduino.py**, que emula o comportamento do Arduino.  
+Útil para testes quando o hardware não está disponível.
 
-Arduino Uno (ou Nano)
+---
 
-OpenWeather API (forecast 5-day/3-hour)
+##  Tecnologias Utilizadas
 
-HTML para interface simples de testes
+| Categoria          | Tecnologia        | Função no Projeto                                   |
+|-------------------|-------------------|------------------------------------------------------|
+| Backend           | Python 3.10+      | Linguagem principal                                  |
+| Framework         | Flask             | Criação dos endpoints da API                         |
+| API Externa       | Requests          | Consumo da API OpenWeatherMap                        |
+| Comunicação Serial| PySerial          | Ponte Python ↔ Arduino                               |
+| Microcontrolador  | Arduino Uno/Nano  | Controle físico da bomba via relé                    |
+| Configuração      | python-dotenv     | Carregamento de variáveis de ambiente (.env)         |
 
-Estrutura do Projeto
+---
 
-horta_api/
-│
-├── app.py                # API Flask que consulta a previsão do tempo
-├── serial_bridge.py      # Comunicação Arduino ↔ Python (modo real e simulado)
-├── simulador_arduino.py  # Simula respostas caso o Arduino não esteja conectado
-├── arduino/
-│   └── horta_arduino.ino # Código do Arduino
-│
-├── index.html            # Interface simples local
-├── requirements.txt      # Dependências do Python
-├── .env.example          # Modelo do arquivo .env
-└── .gitignore
+##  Estrutura Recomendada do Projeto
+```bash
+HORTA_API/
+├── app.py
+├── simulador_arduino.py
+├── requirements.txt
+├── .env
+├── README.md
+└── utils/
+    ├── weather.py
+    └── serial_controller.py

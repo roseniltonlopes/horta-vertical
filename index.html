@@ -2,97 +2,160 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Previsão do Tempo (API Local)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌿 Horta Vertical Inteligente - Teste API</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
     <style>
+        :root {
+            /* Paleta de Cores */
+            --cor-primaria: #2E8B57; 
+            --cor-secundaria: #3498db; 
+            --cor-fundo: #f4f7f6; 
+            --cor-texto: #333333;
+            --cor-sucesso: #27ae60;
+            --cor-erro: #c0392b;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background-color: #ecf0f1;
+            font-family: 'Poppins', sans-serif; 
+            background-color: var(--cor-fundo);
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
         }
 
-        .container {
+        .card { 
+            background-color: #ffffff;
+            padding: 2.5rem;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
             text-align: center;
-            background-color: #fff;
-            padding: 25px;
-            border-radius: 10px;
-            width: 380px;
-            box-shadow: 0 0 12px rgba(0,0,0,0.15);
+            transition: transform 0.3s ease;
+        }
+
+        .icon-header {
+            font-size: 3rem;
+            color: var(--cor-primaria);
+            margin-bottom: 1rem;
         }
 
         h1 {
-            color: #2c3e50;
+            color: var(--cor-primaria); 
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        h2 { /* Adicionando um subtítulo para o contexto */
+            color: var(--cor-texto);
+            font-size: 1.1rem;
+            font-weight: 400;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 1rem;
         }
 
         button {
-            background-color: #27ae60;
+            background-color: var(--cor-secundaria); 
             color: #fff;
-            padding: 12px 25px;
+            padding: 14px 30px;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
-            margin-top: 15px;
-            font-size: 16px;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            transition: background-color 0.3s ease, transform 0.1s;
         }
 
         button:hover {
-            background-color: #219150;
+            background-color: #2980b9; 
+        }
+        
+        button:active {
+            transform: scale(0.98);
         }
 
         .mensagem {
-            margin-top: 20px;
-            font-size: 18px;
+            margin-top: 2rem;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            min-height: 50px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .erro {
-            color: #c0392b;
+            color: var(--cor-erro);
+            background-color: #fcebeb;
+            border: 1px solid var(--cor-erro);
         }
 
         .sucesso {
-            color: #27ae60;
+            color: var(--cor-sucesso);
+            background-color: #e9faee;
+            border: 1px solid var(--cor-sucesso);
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>🌦️ Teste da API de Previsão do Tempo</h1>
+    <div class="card">
+        <div class="icon-header">
+            <i class="fa-solid fa-cloud-sun-rain"></i>
+        </div>
+        <h1>HORTA VERTICAL</h1>
+        <h2>Automação Inteligente de Irrigação</h2>
 
-        <button onclick="verificar()">Verificar Previsão</button>
+        <button onclick="verificar()">
+            <i class="fa-solid fa-plug"></i> Verificar Previsão
+        </button>
 
-        <div id="resultado" class="mensagem"></div>
+        <div id="resultado" class="mensagem">
+            Aguardando consulta...
+        </div>
     </div>
 
 <script>
     async function verificar() {
         const resultado = document.getElementById("resultado");
-        resultado.innerHTML = "⏳ Consultando API...";
+        resultado.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Consultando API...';
+        resultado.className = "mensagem"; 
 
         try {
-            // 👉 URL CORRETA DA SUA API FLASK LOCAL
+            
             const url = "http://127.0.0.1:5000/api/v1/previsao";
 
             const resposta = await fetch(url);
             if (!resposta.ok) {
-                throw new Error("Erro HTTP: " + resposta.status);
+                // Tenta ler a resposta para fornecer mais detalhes do erro HTTP
+                const erroTexto = await resposta.text();
+                throw new Error("Erro HTTP: " + resposta.status + (erroTexto ? ` - Detalhe: ${erroTexto.substring(0, 50)}...` : ''));
             }
 
             const dados = await resposta.json();
 
+            
             if (dados.vai_chover) {
-                resultado.innerHTML = `☔ Vai chover! Probabilidade: <b>${dados.probabilidade * 100}%</b>`;
+                resultado.innerHTML = `<i class="fa-solid fa-cloud-showers-heavy"></i> Vai chover! Probabilidade: <b>${(dados.probabilidade * 100).toFixed(0)}%</b>`;
                 resultado.className = "mensagem sucesso";
             } else {
-                resultado.innerHTML = `🌤️ Não vai chover. Probabilidade: <b>${dados.probabilidade * 100}%</b>`;
+                resultado.innerHTML = `<i class="fa-solid fa-sun"></i> Não vai chover. Probabilidade: <b>${(dados.probabilidade * 100).toFixed(0)}%</b>`;
                 resultado.className = "mensagem sucesso";
             }
 
         } catch (erro) {
-            resultado.innerHTML = "❌ Erro ao conectar à API local.<br>" + erro;
+            resultado.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Erro ao conectar à API local.<br><span style="font-weight: 400; font-size: 0.9em;">${erro.message}</span>`;
             resultado.className = "mensagem erro";
         }
     }
@@ -100,4 +163,3 @@
 
 </body>
 </html>
-

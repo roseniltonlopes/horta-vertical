@@ -2,15 +2,17 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 import requests
 import os
+import psycopg2
+from psycopg2 import sql
 from dotenv import load_dotenv
 
-# Carrega as variáveis do .env
+# Carrega variáveis do .env
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# Agora tudo vem do .env
+# Dados da previsão
 LATITUDE = os.getenv("LATITUDE")
 LONGITUDE = os.getenv("LONGITUDE")
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
@@ -18,6 +20,50 @@ LIMITE_CHANCE_CHUVA = float(os.getenv("LIMITE_CHANCE_CHUVA", 0.5))
 
 URL_CLIMA = "http://api.openweathermap.org/data/2.5/forecast"
 
+# Dados do PostgreSQL
+DB_HOST = os.getenv("POSTGRES_HOST")
+DB_PORT = os.getenv("POSTGRES_PORT")
+DB_NAME = os.getenv("POSTGRES_DB")
+DB_USER = os.getenv("POSTGRES_USER")
+DB_PASS = os.getenv("POSTGRES_PASSWORD")
+
+# --------------------------------------------------------------
+# Conectar ao PostgreSQL
+# --------------------------------------------------------------
+def conectar_pg():
+    return psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        database=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS
+    )
+
+# --------------------------------------------------------------
+#  Criar tabela caso não exista
+# --------------------------------------------------------------
+def inicializar_banco():
+    conn = conectar_pg()
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS historico_previsao (
+            id SERIAL PRIMARY KEY,
+            data_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            prob_chuva REAL,
+            vai_chover BOOLEAN
+        )
+    """)
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+inicializar_banco()
+
+# --------------------------------------------------------------
+# Endpoint da previsão
+# --------------------------------------------------------------
 @app.route("/api/v1/previsao", methods=["GET"])
 def previsao():
     try:
@@ -34,12 +80,28 @@ def previsao():
 
         max_prob_chuva = 0.0
 
-        for i in range(4):  
+        # Verifica primeiras 4 horas
+        for i in range(4):
             if i < len(dados.get('list', [])):
                 prob = dados['list'][i].get('pop', 0.0)
                 max_prob_chuva = max(max_prob_chuva, prob)
 
         vai_chover = max_prob_chuva >= LIMITE_CHANCE_CHUVA
+
+        # ------------------------------
+        # Salvar no PostgreSQL
+        # ------------------------------
+        conn = conectar_pg()
+        cur = conn.cursor()
+
+        cur.execute("""
+            INSERT INTO historico_previsao (prob_chuva, vai_chover)
+            VALUES (%s, %s)
+        """, (max_prob_chuva, vai_chover))
+
+        conn.commit()
+        cur.close()
+        conn.close()
 
         return jsonify({
             "vai_chover": vai_chover,
@@ -47,18 +109,13 @@ def previsao():
         })
 
     except Exception as e:
-        print("ERRO DETECTADO NA API:", e) 
-        return jsonify({
-            "erro": "Falha ao consultar API do clima",
-            "detalhe": str(e)
-        }), 500
+        print("ERRO DETECTADO:", e)
+        return jsonify({"erro": str(e)}), 500
 
 
 @app.route("/")
 def home():
-    return jsonify({"status": "API da Horta Online"})
-
+    return jsonify({"status": "API da Horta Online com PostgreSQL"})
 
 if __name__ == "__main__":
-    print("API KEY LIDA:", API_KEY)
     app.run(debug=False, host="0.0.0.0", port=5000)
