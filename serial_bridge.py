@@ -1,123 +1,68 @@
-import requests
-import time
 import serial
-import serial.tools.list_ports
+import time
+import requests
+import os
+from serial.tools import list_ports
 
-# ======================================================
-# CONFIGURAÇÕES DO SISTEMA
-# ======================================================
+PORTA_SERIAL = 'COM5' 
+BAUDRATE = 115200 
 
-API_URL = "http://127.0.0.1:5000/api/v1/previsao"
-INTERVALO_CONSULTA = 3600  # 1 hora = 3600 segundos
+# ---------------- CONFIGURAÇÃO DA SUA API FLASK ----------------
+URL_SUA_API = "http://127.0.0.1:5000/api/v1/previsao" 
 
-# MODO TESTE — USE True SE NÃO TIVER ARDUINO CONECTADO
-MODO_TESTE = False
+# ---------------- FUNÇÕES DE COMUNICAÇÃO ----------------
 
-
-# ======================================================
-# FUNÇÃO: BUSCAR PORTA DO ARDUINO AUTOMATICAMENTE
-# ======================================================
-
-def encontrar_porta_arduino():
-    print("Procurando Arduino nas portas COM...")
-
-    portas = serial.tools.list_ports.comports()
-
-    for porta in portas:
-        if "Arduino" in porta.description or "CH340" in porta.description:
-            print(f"Arduino encontrado em: {porta.device}")
-            return porta.device
-
-    print("Nenhum Arduino encontrado.")
-    return None
-
-
-# ======================================================
-# COMUNICAÇÃO COM A API
-# ======================================================
-
-def consultar_api():
+def consultar_sua_api():
+    """Chama o endpoint Flask e retorna a resposta formatada para o Arduino."""
+    print("-> Chamando a API Flask...")
     try:
-        resposta = requests.get(API_URL, timeout=5)
+        #Chamar o endpoint Flask
+        resposta = requests.get(URL_SUA_API, timeout=10)
+        resposta.raise_for_status() 
         dados = resposta.json()
-        print(f"Previsão recebida: vai chover = {dados['vai_chover']} (probabilidade={dados['probabilidade']})")
-        return dados
 
-    except Exception as erro:
-        print("Erro ao consultar a API:", erro)
-        return None
+        vai_chover = dados.get('vai_chover', False)
+        
+        if vai_chover:
+            return "API:sim" 
+        else:
+            return "API:nao"
 
+    except requests.exceptions.RequestException as e:
+        print(f"Erro ao consultar a API Flask: {e}")
+        return "API:erro"
 
-# ======================================================
-# MODO TESTE (SEM ARDUINO)
-# ======================================================
+def enviar_resposta(ser, resposta):
+    """Envia a string de resposta para o Arduino via serial, seguida por quebra de linha."""
+    ser.write(f"{resposta}\n".encode('utf-8'))
+    print(f"<- Resposta enviada ao Arduino: {resposta}")
 
-def modo_simulacao():
-    print("\nModo simulação ativado (sem Arduino).")
-    print("O sistema consultará a API a cada 1 hora.\n")
+# ---------------- LOOP PRINCIPAL DO CLIENTE SERIAL ----------------
 
-    while True:
-        dados = consultar_api()
-        if dados:
-            if dados["vai_chover"]:
-                print("Simulação: Não irrigar (chuva prevista).")
-            else:
-                print("Simulação: Irrigar (sem chuva prevista).")
+def main():
+    try:
+        ser = serial.Serial(PORTA_SERIAL, BAUDRATE, timeout=1)
+        time.sleep(2) 
+        print(f"Cliente Serial conectado em {PORTA_SERIAL} @ {BAUDRATE}. Monitorando comandos...")
+        print("-" * 50)
 
-        print("Aguardando 1 hora para nova consulta...\n")
-        time.sleep(INTERVALO_CONSULTA)
-
-
-# ======================================================
-# MODO COM ARDUINO REAL
-# ======================================================
-
-def modo_arduino():
-    porta = encontrar_porta_arduino()
-
-    if porta is None:
-        print("\nNenhum Arduino detectado. Iniciando modo simulação...")
-        modo_simulacao()
+    except serial.SerialException as e:
+        print(f"ERRO: Não foi possível abrir a porta serial {PORTA_SERIAL}.")
+        print("Verifique se o Arduino está conectado e a porta está correta.")
+        print(e)
         return
 
-    arduino = serial.Serial(porta, 9600, timeout=1)
-    time.sleep(2)
-
-    print("\nArduino conectado.")
-    print("Sistema de irrigação iniciado.")
-    print("Consultas automáticas a cada 1 hora.\n")
-
-    while True:
-        print("\nEnviando comando ao Arduino: pedir_previsao")
-        arduino.write(b"pedir_previsao\n")
-        time.sleep(1)
-
-        resposta = arduino.readline().decode().strip()
-        print("Resposta do Arduino:", resposta)
-
-        dados = consultar_api()
-        if dados is None:
-            continue
-
-        if dados["vai_chover"]:
-            print("Enviando comando: API:sim (não irrigar)")
-            arduino.write(b"API:sim\n")
-        else:
-            print("Enviando comando: API:nao (irrigar)")
-            arduino.write(b"API:nao\n")
-
-        print("Aguardando 1 hora para nova consulta...")
-        time.sleep(INTERVALO_CONSULTA)
-
-
-# ======================================================
-# INÍCIO DO PROGRAMA
-# ======================================================
+    while True:  
+        linha = ser.readline().decode('utf-8').strip()
+        
+        if linha == "pedir_previsao":
+            print(f"[{time.strftime('%H:%M:%S')}] > Comando recebido do Arduino: {linha}")
+            
+            resposta_api = consultar_sua_api()
+            
+            enviar_resposta(ser, resposta_api)
+        
+        time.sleep(0.1)
 
 if __name__ == "__main__":
-    print("Iniciando sistema de irrigação...\n")
-
-    if MODO_TESTE:
-        modo_simulacao()
-    else:
-        modo_arduino()
+    main()

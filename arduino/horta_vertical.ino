@@ -1,129 +1,150 @@
 #include <LiquidCrystal.h>
 
-// Conexões do LCD
+// ------------------------ LCD ------------------------
 const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
-// Conexões dos sensores e atuadores
+// ------------------------ Sensores e Rele ------------------------
 const int PINO_SENSOR = A0;
-const int PINO_RELE   = 10;
+const int PINO_RELE = 10;
 
-// Configurações do sistema
+// ------------------------ Configurações ------------------------
+const int LIMIAR_SECO = 30;              
+const unsigned long TEMPO_REGA = 200;  
+const unsigned long INTERVALO_API = 240000; 
+
+unsigned long ultimo_api = 0;
 int umidadeSolo = 0;
-const int LIMIAR_SECO = 70;     // abaixo disso a terra é considerada seca
-const unsigned long TEMPO_REGA = 8000; // 8 segundos
-const unsigned long INTERVALO_CONSULTA = 3600000; // 1 hora
 
-unsigned long ultimo_tempo = 0;
+// ------------------------ Auxiliares ------------------------
+void limparLinha(byte linha) {
+  lcd.setCursor(0, linha);
+  lcd.print("                "); 
+  lcd.setCursor(0, linha);
+}
 
-void setup() {
-  pinMode(PINO_RELE, OUTPUT);
-  digitalWrite(PINO_RELE, HIGH); // Relé desligado
+// ------------------------ Rega ------------------------
+void irrigar() {
+  limparLinha(1);
+  lcd.print("Regando...");
+  delay(500);
 
-  lcd.begin(16, 2);
-  lcd.print(" Horta Inteligente ");
+  digitalWrite(PINO_RELE, LOW);
 
-  Serial.begin(9600);
+  unsigned long inicio = millis();
+  while (millis() - inicio < TEMPO_REGA) {
+    limparLinha(1);
+    lcd.print("Regando...");
+    delay(500);
+  }
+
+  digitalWrite(PINO_RELE, HIGH); 
+
+  limparLinha(1);
+  lcd.print("Rega concluida");
   delay(2000);
 }
 
+// ------------------------ Setup ------------------------
+void setup() {
+  pinMode(PINO_RELE, OUTPUT);
+  digitalWrite(PINO_RELE, HIGH); 
+
+  lcd.begin(16, 2);
+  lcd.print("Horta Vertical");
+  limparLinha(1);
+  lcd.print("Inicializando");
+
+  Serial.begin(115200);
+  delay(2000);
+}
+
+// ------------------------ Loop ------------------------
 void loop() {
 
-  // ==== LEITURA DA UMIDADE DO SOLO ====
+  // ====== Leitura do sensor ======
   umidadeSolo = analogRead(PINO_SENSOR);
   umidadeSolo = map(umidadeSolo, 1023, 0, 0, 100);
 
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Umidade:");
+  limparLinha(1);
+  lcd.print("Umidade: ");
   lcd.print(umidadeSolo);
   lcd.print("%");
-
   delay(1000);
 
-  // ======= A CADA 1 HORA =======
-  if (millis() - ultimo_tempo >= INTERVALO_CONSULTA) {
+  // ====== MODO MANUAL VIA SERIAL ======
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
 
-    ultimo_tempo = millis();
+    if (cmd == "regar") {
+      irrigar();
+    }
+  }
 
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Consultando API");
-    delay(1000);
+  // ====== CHAMADA AUTOMÁTICA À API ======
+  if (millis() - ultimo_api >= INTERVALO_API) {
 
-    // Solicita previsão ao Python
+    ultimo_api = millis();
+    limparLinha(1);
+    lcd.print("Consultando...");
+    delay(500);
+
     Serial.println("pedir_previsao");
 
-    // Aguarda resposta
-    unsigned long tempo_inicio = millis();
-    String resposta = "";
+    
+    while (Serial.available()) Serial.read();
 
-    while (millis() - tempo_inicio < 5000) { // 5 segundos
+    String resposta = "";
+    unsigned long inicio = millis();
+
+    while (millis() - inicio < 5000) {
       if (Serial.available()) {
-        resposta = Serial.readStringUntil('\n');
-        resposta.trim();
-        break;
+        char c = Serial.read();
+        if (c == '\n') break;
+        resposta += c;
       }
     }
 
-    if (resposta == "API:sim") {
-      // Vai chover → NÃO IRRIGAR
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Vai chover!");
-      lcd.setCursor(0, 1);
-      lcd.print("Sem irrigacao");
-      digitalWrite(PINO_RELE, HIGH);
-      delay(3000);
-    }
-    else if (resposta == "API:nao") {
-      // Não vai chover → IRRIGA
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Nao vai chover");
-      lcd.setCursor(0, 1);
-      lcd.print("Irrigando...");
-      
-      digitalWrite(PINO_RELE, LOW);   // Liga bomba
-      delay(TEMPO_REGA);
-      digitalWrite(PINO_RELE, HIGH);  // Desliga bomba
+    resposta.trim();
 
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Irrigacao OK");
+    // ====== Interpretação da resposta ======
+    if (resposta == "API:sim") {
+      limparLinha(1);
+      lcd.print("Vai chover");
       delay(2000);
     }
+
+    else if (resposta == "API:nao") {
+      if (umidadeSolo < LIMIAR_SECO) {
+        irrigar();
+      } else {
+        limparLinha(1);
+        lcd.print("Solo umido");
+        delay(2000);
+      }
+    }
+
     else {
-      // Falha na API → usa somente sensor
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Erro API");
+      // Fallback local (API falhou)
+      limparLinha(1);
+      lcd.print("API falhou");
+      delay(1000);
 
       if (umidadeSolo < LIMIAR_SECO) {
-        lcd.setCursor(0, 1);
-        lcd.print("Irrigando...");
-
-        digitalWrite(PINO_RELE, LOW);
-        delay(TEMPO_REGA);
-        digitalWrite(PINO_RELE, HIGH);
-
-      } else {
-        lcd.setCursor(0, 1);
-        lcd.print("Solo OK");
+        irrigar();
       }
-
-      delay(2000);
     }
   }
 
-  // ==== SEGURANÇA: CONTROLE PELO SENSOR ====
+  // ====== Status em repouso ======
   if (umidadeSolo < LIMIAR_SECO) {
-    lcd.setCursor(0, 1);
-    lcd.print("Seco -> Rega ");
+    limparLinha(1);
+    lcd.print("Seco -> Regar");
   } else {
-    lcd.setCursor(0, 1);
-    lcd.print("Umido -> OK  ");
+    limparLinha(1);
+    lcd.print("Umido -> OK");
   }
 
-  delay(1500);
+  delay(3000);
 }

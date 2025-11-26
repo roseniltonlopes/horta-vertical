@@ -6,13 +6,13 @@ import psycopg2
 from psycopg2 import sql
 from dotenv import load_dotenv
 
-# Carrega variáveis do .env
+
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# Dados da previsão
+
 LATITUDE = os.getenv("LATITUDE")
 LONGITUDE = os.getenv("LONGITUDE")
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
@@ -20,16 +20,14 @@ LIMITE_CHANCE_CHUVA = float(os.getenv("LIMITE_CHANCE_CHUVA", 0.5))
 
 URL_CLIMA = "http://api.openweathermap.org/data/2.5/forecast"
 
-# Dados do PostgreSQL
+
 DB_HOST = os.getenv("POSTGRES_HOST")
 DB_PORT = os.getenv("POSTGRES_PORT")
 DB_NAME = os.getenv("POSTGRES_DB")
 DB_USER = os.getenv("POSTGRES_USER")
 DB_PASS = os.getenv("POSTGRES_PASSWORD")
 
-# --------------------------------------------------------------
-# Conectar ao PostgreSQL
-# --------------------------------------------------------------
+
 def conectar_pg():
     return psycopg2.connect(
         host=DB_HOST,
@@ -39,9 +37,7 @@ def conectar_pg():
         password=DB_PASS
     )
 
-# --------------------------------------------------------------
-#  Criar tabela caso não exista
-# --------------------------------------------------------------
+
 def inicializar_banco():
     conn = conectar_pg()
     cur = conn.cursor()
@@ -61,9 +57,7 @@ def inicializar_banco():
 
 inicializar_banco()
 
-# --------------------------------------------------------------
-# Endpoint da previsão
-# --------------------------------------------------------------
+
 @app.route("/api/v1/previsao", methods=["GET"])
 def previsao():
     try:
@@ -88,9 +82,7 @@ def previsao():
 
         vai_chover = max_prob_chuva >= LIMITE_CHANCE_CHUVA
 
-        # ------------------------------
-        # Salvar no PostgreSQL
-        # ------------------------------
+      
         conn = conectar_pg()
         cur = conn.cursor()
 
